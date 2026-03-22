@@ -1,0 +1,54 @@
+{
+  "name": "@beyondplay/game-prompt-engine",
+  "version": "0.1.0",
+  "description": "Prompt → Playable HTML5 Game. AI-powered game generation CLI.",
+  "type": "module",
+  "bin": {
+    "game-prompt-engine": "./dist/cli.js",
+    "gpe": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "game",
+    "html5",
+    "game-generation",
+    "openai",
+    "anthropic",
+    "gemini",
+    "cli",
+    "vibe-coding",
+    "beyondplay"
+  ],
+  "author": "BeyondPlay <hello@beyondplay.xyz>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BeyondPlay-AI/game-prompt-engine"
+  },
+  "homepage": "https://beyondplay.xyz",
+  "dependencies": {
+    "openai": "^4.80.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.0",
+    "commander": "^13.1.0",
+    "chalk": "^5.4.1",
+    "ora": "^8.2.0",
+    "express": "^5.1.0",
+    "open": "^10.1.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "tsup": "^8.4.0",
+    "@types/node": "^22.13.0",
+    "@types/express": "^5.0.0"
+  }
+}
