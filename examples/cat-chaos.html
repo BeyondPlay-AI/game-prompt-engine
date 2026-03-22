@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Catastrophe!</title>
+</head>
+<body style="margin:0; background:#333; display:flex; justify-content:center; align-items:center; height:100vh;">
+  <canvas id="game" width="800" height="600" style="border:4px solid #222;"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Audio setup
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const sounds = {
+  meow: {freq: 500, type: 'triangle', duration: 0.2},
+  crash: {freq: 100, type: 'sawtooth', duration: 0.3},
+  angry: {freq: 200, type: 'square', duration: 0.4}
+};
+
+function playSound(sound) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = sound.type;
+  osc.frequency.setValueAtTime(sound.freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + sound.duration);
+  osc.start();
+  osc.stop(audioCtx.currentTime + sound.duration);
+}
+
+// Game state
+let gameState = 'title';
+let score = 0;
+let savedItems = 0;
+let cat = {x: 400, y: 300, width: 40, height: 30, speed: 5};
+let items = [];
+let hands = [];
+let particles = [];
+let shake = {x: 0, y: 0, intensity: 0};
+let spawnRate = 3000;
+let lastSpawn = 0;
+
+const itemTypes = {
+  laptop: {width: 50, height: 40, points: 50, color: '#666'},
+  mug: {width: 20, height: 25, points: 10, color: '#a52'},
+  vase: {width: 25, height: 45, points: 20, color: '#25a'},
+  phone: {width: 20, height: 35, points: 30, color: '#333'},
+  glass: {width: 15, height: 30, points: 15, color: '#9cf'}
+};
+
+function spawnItem() {
+  const type = Object.keys(itemTypes)[Math.floor(Math.random() * 5)];
+  items.push({
+    x: Math.random() * (canvas.width - 100) + 50,
+    y: Math.random() * (canvas.height - 200) + 50,
+    type: type,
+    vx: 0,
+    vy: 0
+  });
+}
+
+function spawnHand() {
+  const side = Math.random() > 0.5;
+  hands.push({
+    x: side ? -50 : canvas.width + 50,
+    y: Math.random() * (canvas.height - 100) + 50,
+    width: 40,
+    height: 30,
+    side: side,
+    speed: 4
+  });
+}
+
+function createParticles(x, y, color) {
+  for(let i = 0; i < 10; i++) {
+    particles.push({
+      x: x,
+      y: y,
+      vx: (Math.random() - 0.5) * 10,
+      vy: (Math.random() - 0.5) * 10,
+      life: 1,
+      color: color
+    });
+  }
+}
+
+function update() {
+  if(gameState === 'playing') {
+    // Cat movement
+    if(keys.ArrowLeft) cat.x = Math.max(0, cat.x - cat.speed);
+    if(keys.ArrowRight) cat.x = Math.min(canvas.width - cat.width, cat.x + cat.speed);
+    if(keys.ArrowUp) cat.y = Math.max(0, cat.y - cat.speed);
+    if(keys.ArrowDown) cat.y = Math.min(canvas.height - cat.height, cat.y + cat.speed);
+
+    // Spawn items
+    if(Date.now() - lastSpawn > spawnRate) {
+      spawnItem();
+      lastSpawn = Date.now();
+      spawnRate = Math.max(1000, spawnRate * 0.95);
+    }
+
+    // Random hand spawns
+    if(Math.random() < 0.02) spawnHand();
+
+    // Update items
+    items.forEach(item => {
+      // Cat collision
+      if(collision(cat, {...item, ...itemTypes[item.type]})) {
+        item.vx = (item.x - cat.x) * 0.5;
+        item.vy = (item.y - cat.y) * 0.5;
+        playSound(sounds.meow);
+      }
+      
+      item.x += item.vx;
+      item.y += item.vy;
+      item.vx *= 0.95;
+      item.vy *= 0.95;
+    });
+
+    // Update hands
+    hands = hands.filter(hand => {
+      hand.x += hand.side ? 4 : -4;
+      
+      // Check for catching items
+      items = items.filter(item => {
+        if(collision(hand, {...item, ...itemTypes[item.type]})) {
+          savedItems++;
+          playSound(sounds.angry);
+          createParticles(item.x, item.y, '#f00');
+          if(savedItems >= 5) gameState = 'gameover';
+          return false;
+        }
+        return true;
+      });
+      
+      return hand.x > -100 && hand.x < canvas.width + 100;
+    });
+
+    // Check items falling off table
+    items = items.filter(item => {
+      if(item.y > canvas.height) {
+        score += itemTypes[item.type].points;
+        playSound(sounds.crash);
+        shake.intensity = 10;
+        createParticles(item.x, canvas.height, itemTypes[item.type].color);
+        return false;
+      }
+      return true;
+    });
+
+    // Update particles
+    particles = particles.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.02;
+      return p.life > 0;
+    });
+
+    // Screen shake
+    if(shake.intensity > 0) {
+      shake.x = (Math.random() - 0.5) * shake.intensity;
+      shake.y = (Math.random() - 0.5) * shake.intensity;
+      shake.intensity *= 0.9;
+    }
+  }
+}
+
+function draw() {
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
+  ctx.fillStyle = '#765';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if(gameState === 'title') {
+    ctx.fillStyle = '#fff';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('CATASTROPHE!', canvas.width/2, 200);
+    ctx.font = '24px Arial';
+    ctx.fillText('Push items off the table!', canvas.width/2, 250);
+    ctx.fillText('Arrow keys to move', canvas.width/2, 300);
+    ctx.fillText('Press SPACE to start', canvas.width/2, 350);
+  } else if(gameState === 'playing') {
+    // Draw items
+    items.forEach(item => {
+      ctx.fillStyle = itemTypes[item.type].color;
+      ctx.fillRect(item.x, item.y, itemTypes[item.type].width, itemTypes[item.type].height);
+    });
+
+    // Draw hands
+    hands.forEach(hand => {
+      ctx.fillStyle = '#fca';
+      ctx.fillRect(hand.x, hand.y, hand.width, hand.height);
+    });
+
+    // Draw cat
+    ctx.fillStyle = '#333';
+    ctx.fillRect(cat.x, cat.y, cat.width, cat.height);
+
+    // Draw particles
+    particles.forEach(p => {
+      ctx.fillStyle = p.color + Math.floor(p.life * 255).toString(16);
+      ctx.fillRect(p.x, p.y, 4, 4);
+    });
+
+    // Draw HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Score: ${score}`, 20, 30);
+    ctx.fillText(`Saved: ${savedItems}/5`, 20, 60);
+  } else if(gameState === 'gameover') {
+    ctx.fillStyle = '#fff';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER!', canvas.width/2, 200);
+    ctx.font = '24px Arial';
+    ctx.fillText(`Final Score: ${score}`, canvas.width/2, 250);
+    ctx.fillText('Press SPACE to play again', canvas.width/2, 300);
+  }
+  
+  ctx.restore();
+}
+
+function collision(a, b) {
+  return a.x < b.x + b.width &&
+         a.x + a.width > b.x &&
+         a.y < b.y + b.height &&
+         a.y + a.height > b.y;
+}
+
+// Input handling
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(e.code === 'Space') {
+    if(gameState === 'title' || gameState === 'gameover') {
+      gameState = 'playing';
+      score = 0;
+      savedItems = 0;
+      items = [];
+      hands = [];
+      particles = [];
+      spawnRate = 3000;
+      cat = {x: 400, y: 300, width: 40, height: 30, speed: 5};
+    }
+  }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Touch controls
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+});
+canvas.addEventListener('touchmove', e => {
+  if(!touchStart) return;
+  const dx = e.touches[0].clientX - touchStart.x;
+  const dy = e.touches[0].clientY - touchStart.y;
+  cat.x = Math.max(0, Math.min(canvas.width - cat.width, cat.x + dx * 0.1));
+  cat.y = Math.max(0, Math.min(canvas.height - cat.height, cat.y + dy * 0.1));
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+});
+canvas.addEventListener('touchend', () => touchStart = null);
+
+// Game loop
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
